@@ -16,6 +16,8 @@ test/             单元测试（node:test，注入伪 vscode 模块）
 
 桥是单向的：DSH 作为客户端，按实例文件找到 VSCode 窗口，再用 JSON-RPC over HTTP 调用扩展。
 
+开发流程（分支命名、review 与测试门槛、推送 `main` 必须用户确认）见 [docs/GIT-WORKFLOW.md](docs/GIT-WORKFLOW.md)。
+
 ## 安装
 
 1. 装扩展：
