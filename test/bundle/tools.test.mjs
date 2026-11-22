@@ -1,6 +1,39 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { terminalTimeouts, createTools } from '../../bundle/lib/tools.js'
+import { terminalTimeouts, createTools, waitForNewInstance } from '../../bundle/lib/tools.js'
+
+const inst = (pid, folders) => ({ pid, port: 50000 + pid, token: `t${pid}`, folders, repoRoots: folders, version: '0.2.0' })
+
+test('waitForNewInstance 只认目标窗口的新实例，不把别的窗口当成功', async () => {
+  let calls = 0
+  const discover = async () => {
+    calls += 1
+    // 111 = 目标窗口旧实例；222 = 另一个窗口一直在跑；第 2 轮出现目标窗口的新实例 333
+    return calls === 1 ? [inst(111, ['C:\\a']), inst(222, ['C:\\b'])] : [inst(333, ['C:\\a']), inst(222, ['C:\\b'])]
+  }
+  const fresh = await waitForNewInstance({
+    previousPid: 111,
+    targetFolders: ['C:\\a'],
+    excludePids: new Set([111, 222]),
+    intervalMs: 1,
+    timeoutMs: 200,
+    discover,
+  })
+  assert.equal(fresh.pid, 333)
+})
+
+test('目标窗口没重启时不会拿别的窗口顶包', async () => {
+  const discover = async () => [inst(111, ['C:\\a']), inst(222, ['C:\\b'])]
+  const fresh = await waitForNewInstance({
+    previousPid: 111,
+    targetFolders: ['C:\\a'],
+    excludePids: new Set([111, 222]),
+    intervalMs: 1,
+    timeoutMs: 30,
+    discover,
+  })
+  assert.equal(fresh, undefined)
+})
 
 test('不传 timeoutMs 时命令按 60s、请求层多留 10s', () => {
   assert.deepEqual(terminalTimeouts({}, 15_000), { commandMs: 60_000, requestMs: 70_000 })

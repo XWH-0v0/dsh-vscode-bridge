@@ -72,18 +72,32 @@ export function terminalTimeouts(args = {}, base = 15_000, defaultCommandMs = 60
   return { commandMs, requestMs: Math.max(base, commandMs + 10_000) }
 }
 
-/** 轮询到出现一个不同 pid 的实例，才算真的重载了。 */
+function folderKey(folders) {
+  if (!Array.isArray(folders) || folders.length === 0) return undefined
+  return folders.map((folder) => String(folder).toLowerCase()).sort().join('|')
+}
+
+/**
+ * 轮询到"目标窗口"的新实例才算重载成功。
+ * 只看 pid 不等是不够的：多个窗口共用一个桥接目录，别的窗口的实例会被误认。
+ */
 export async function waitForNewInstance({
   dir,
   previousPid,
-  timeoutMs = 15_000,
-  intervalMs = 500,
+  targetFolders,
+  excludePids,
+  timeoutMs = 10_000,
+  intervalMs = 400,
   discover = discoverInstances,
 } = {}) {
+  const wantFolders = folderKey(targetFolders)
+  const excluded = excludePids instanceof Set ? excludePids : new Set(excludePids ?? [])
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     const instances = await discover({ dir, timeoutMs: 500 }).catch(() => [])
-    const fresh = instances.find((item) => item.pid !== previousPid)
+    const fresh = instances.find((item) => item.pid !== previousPid
+      && !excluded.has(item.pid)
+      && (wantFolders === undefined || folderKey(item.folders) === wantFolders))
     if (fresh) return fresh
     await new Promise((resolve) => setTimeout(resolve, intervalMs))
   }
@@ -573,7 +587,7 @@ export function createTools({ ctx, settings, logger }) {
           : `重载未确认：${value.note ?? `等了 ${value.waitedMs ?? 0}ms 没看到新实例，pid 仍是 ${value.previousPid}`}`,
       }],
     },
-    timeoutMs: Math.max(timeoutMs, 60_000),
+    timeoutMs: Math.max(60_000, timeoutMs + 20_000), // 覆盖一次 RPC + 12s 轮询
     isConcurrencySafe: () => false,
     async execute(args, exec) {
       const action = args.action === 'reload_window' ? 'reload_window' : 'restart_extensions'
@@ -587,6 +601,10 @@ export function createTools({ ctx, settings, logger }) {
 
       const previousPid = instance.pid
       const startedAt = Date.now()
+      // 重载前快照所有实例：只有"快照里没有的新 pid"才算重启过
+      const beforePids = new Set(
+        (await discoverInstances({ dir: settings.bridgeDir, timeoutMs: 500 }).catch(() => [])).map((item) => item.pid),
+      )
       let note
       try {
         await callBridge(instance, op, {}, { timeoutMs })
@@ -599,7 +617,9 @@ export function createTools({ ctx, settings, logger }) {
       const fresh = await waitForNewInstance({
         dir: settings.bridgeDir,
         previousPid,
-        timeoutMs: Math.max(5_000, settings.requestTimeoutMs),
+        targetFolders: instance.folders,
+        excludePids: beforePids,
+        timeoutMs: 12_000,
       })
       return buildDevResult({ action, previousPid, fresh, waitedMs: Date.now() - startedAt, note })
     },
