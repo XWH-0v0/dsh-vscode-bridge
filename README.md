@@ -11,7 +11,7 @@
 
 ```text
 extension/        VSCode 扩展（零依赖 CommonJS，装进 ~/.vscode/extensions）
-bundle/           DSH Host 插件（注册 7 个 vscode_* 工具）
+bundle/           DSH Host 插件（注册 8 个 vscode_* 工具）
 scripts/install.ps1   安装扩展 + 提示重载
 test/             单元测试（node:test，注入伪 vscode 模块）
 ```
@@ -27,8 +27,10 @@ test/             单元测试（node:test，注入伪 vscode 模块）
    pwsh -File scripts/install.ps1
    ```
    然后在 VSCode 里 `Ctrl+Shift+P` → **Developer: Reload Window**。状态栏出现 `DSH:<端口>` 即就绪。
-   只有首次安装需要这一步：之后把新代码拷进安装目录，扩展会自己重启宿主（`dshVscodeBridge.hotReload`，默认开），
-   也可以用 `vscode_dev(action:"reload")` 手动触发。
+   安装目录固定为 `local.dsh-vscode-bridge`（不带版本号），升级时原地覆盖、路径不变。
+   若开启了 `dshVscodeBridge.hotReload`（默认关），`scripts/install.ps1` 写的
+   `~/.dsh/vscode-bridge/reload.trigger` 会让窗口自动重启扩展宿主；否则用
+   `vscode_dev(action:"reload")`（会轮询实例 pid 确认真的是否重启）或手动重载一次。
 
 2. 装 DSH 插件（bundle）。先装依赖（bundle 是链接目录，pnpm 不会自动装它的依赖）：
    ```powershell
@@ -68,7 +70,7 @@ test/             单元测试（node:test，注入伪 vscode 模块）
 - 只支持本机窗口；Remote-SSH / WSL / Dev Container 不在范围内。
 - `stash` 不在 VSCode 的 Git API 里，会返回 `UNSUPPORTED` 并让你用终端。
 - 多根工作区按"包含目标路径的最深仓库"选，不按文件所属编辑器猜。
-- 扩展更新后必须重载窗口才会生效。
+- 热更新默认关闭；开启后任何能写 `~/.dsh/vscode-bridge/reload.trigger` 的进程都能让扩展重新加载代码。
 
 ## 测试
 
@@ -76,3 +78,4 @@ test/             单元测试（node:test，注入伪 vscode 模块）
 $node = "C:\Users\MECHREVO\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\node\bin\node.exe"
 & $node --test "test/**/*.test.mjs"
 ```
+

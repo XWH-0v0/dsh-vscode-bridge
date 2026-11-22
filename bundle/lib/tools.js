@@ -72,6 +72,39 @@ export function terminalTimeouts(args = {}, base = 15_000, defaultCommandMs = 60
   return { commandMs, requestMs: Math.max(base, commandMs + 10_000) }
 }
 
+/** 轮询到出现一个不同 pid 的实例，才算真的重载了。 */
+export async function waitForNewInstance({
+  dir,
+  previousPid,
+  timeoutMs = 15_000,
+  intervalMs = 500,
+  discover = discoverInstances,
+} = {}) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const instances = await discover({ dir, timeoutMs: 500 }).catch(() => [])
+    const fresh = instances.find((item) => item.pid !== previousPid)
+    if (fresh) return fresh
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+  return undefined
+}
+
+/** 重载结果只在观测到新实例时才算成功。 */
+export function buildDevResult({ action, previousPid, fresh, waitedMs, note } = {}) {
+  if (fresh) {
+    return { scheduled: true, action, reloaded: true, previousPid, pid: fresh.pid, waitedMs }
+  }
+  return {
+    scheduled: true,
+    action,
+    reloaded: false,
+    previousPid,
+    waitedMs,
+    note: note ?? `等了 ${waitedMs}ms 没看到新实例，扩展可能没有重启`,
+  }
+}
+
 export function createTools({ ctx, settings, logger }) {
   const timeoutMs = settings.requestTimeoutMs
 
@@ -518,7 +551,7 @@ export function createTools({ ctx, settings, logger }) {
 
   const devTool = {
     name: 'vscode_dev',
-    description: '维护 VSCode 窗口本身：改完扩展代码后用 reload 让窗口加载新代码（保留编辑器状态、几秒回来），要彻底重开窗口用 reload_window。',
+    description: '维护 VSCode 窗口本身：改完扩展代码后用 reload 让窗口加载新代码（保留编辑器状态、几秒回来），要彻底重开窗口用 reload_window。会轮询实例 pid 确认是否真的重启了。',
     parameters: obj({
       action: { type: 'string', enum: ['reload', 'reload_window'], description: 'reload=重启扩展宿主；reload_window=重载整个窗口' },
       window: str('可选：指定 VSCode 窗口（pid 或文件夹）'),
@@ -528,30 +561,47 @@ export function createTools({ ctx, settings, logger }) {
         scheduled: bool('是否已安排重载'),
         action: str('实际动作'),
         note: str('备注'),
+        reloaded: bool('是否观测到新实例'),
+        previousPid: { type: 'number', description: '重载前的实例 pid' },
+        pid: { type: 'number', description: '重载后的实例 pid' },
+        waitedMs: { type: 'number', description: '等待新实例的毫秒数' },
       }),
       render: (_args, value) => [{
         type: 'text',
-        text: `已安排${value.action === 'reload_window' ? '窗口重载' : '扩展宿主重启'}${value.note ? `（${value.note}）` : ''}；几秒后用 vscode_status 确认新实例`,
+        text: value.reloaded
+          ? `重载成功：pid ${value.previousPid} → ${value.pid}（${value.waitedMs}ms）`
+          : `重载未确认：${value.note ?? `等了 ${value.waitedMs ?? 0}ms 没看到新实例，pid 仍是 ${value.previousPid}`}`,
       }],
     },
-    timeoutMs: Math.max(timeoutMs, 30_000),
+    timeoutMs: Math.max(timeoutMs, 60_000),
     isConcurrencySafe: () => false,
     async execute(args, exec) {
+      const action = args.action === 'reload_window' ? 'reload_window' : 'restart_extensions'
       const op = args.action === 'reload_window' ? 'dev.reloadWindow' : 'dev.reload'
+      let instance
       try {
-        const instance = await bridgeFor(exec, { window: args.window })
-        return await callBridge(instance, op, {}, { timeoutMs })
+        instance = await bridgeFor(exec, { window: args.window })
       } catch (error) {
-        // 重载会掐断连接，超时可能意味着"已经在重启了"
-        if (error instanceof BridgeError && error.code === 'TIMEOUT') {
-          return {
-            scheduled: true,
-            action: op === 'dev.reloadWindow' ? 'reload_window' : 'restart_extensions',
-            note: '响应超时，但重载很可能已经发生',
-          }
-        }
         throw asToolError(error)
       }
+
+      const previousPid = instance.pid
+      const startedAt = Date.now()
+      let note
+      try {
+        await callBridge(instance, op, {}, { timeoutMs })
+      } catch (error) {
+        // 重载本身就可能掐断连接；只要后续轮询到新实例就算成功
+        if (!(error instanceof BridgeError && error.code === 'TIMEOUT')) throw asToolError(error)
+        note = '请求超时（重载通常这时候已经发生）'
+      }
+
+      const fresh = await waitForNewInstance({
+        dir: settings.bridgeDir,
+        previousPid,
+        timeoutMs: Math.max(5_000, settings.requestTimeoutMs),
+      })
+      return buildDevResult({ action, previousPid, fresh, waitedMs: Date.now() - startedAt, note })
     },
   }
 

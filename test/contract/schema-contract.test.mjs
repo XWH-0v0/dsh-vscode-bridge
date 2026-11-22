@@ -1,11 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { validateValue } from './json-schema.mjs'
-import { createTools } from '../../bundle/lib/tools.js'
+import { createTools, buildDevResult } from '../../bundle/lib/tools.js'
+import { apply as applyPlugin } from '../../bundle/index.js'
 
 const require = createRequire(import.meta.url)
 const { createHandlers } = require('../../extension/lib/handlers.js')
@@ -108,10 +109,25 @@ const tools = createTools({ ctx: { workingDirectory: { get: () => 'C:\\ws' } }, 
 const toolByName = (name) => tools.find((tool) => tool.name === name)
 const schemaOf = (name) => toolByName(name).output.schema
 
-/** 把工具真实产出的值对着它自己声明的 schema 验一遍，并记录覆盖率。 */
-function validateFor(toolName, value) {
+/** 校验通过才计入覆盖——断言失败时不会留下"已覆盖"的假象。 */
+function assertContract(toolName, value, label = toolName) {
+  const errors = validateValue(schemaOf(toolName), JSON.parse(JSON.stringify(value)))
+  assert.deepEqual(errors, [], `${label} 的返回值与 schema 不符`)
   exercised.add(toolName)
-  return validateValue(schemaOf(toolName), JSON.parse(JSON.stringify(value)))
+}
+
+/** 用真实的 apply() 收集注册的工具名，防止"在 createTools 之外注册"绕过规范。 */
+function registeredByPlugin(config = {}) {
+  const names = []
+  applyPlugin({
+    logger: {},
+    tools: {
+      register: (definition) => { names.push(definition.name); return () => undefined },
+      guard: () => () => undefined,
+    },
+    systemPrompt: { section: () => () => undefined, context: () => () => undefined },
+  }, config)
+  return names
 }
 
 async function handlersFor() {
@@ -142,54 +158,68 @@ test('git 族返回值全部能通过 vscode_git 的输出 schema', async () => 
     ['git.push', {}],
   ]
   for (const [op, args] of cases) {
-    assert.deepEqual(validateFor('vscode_git', await handlers[op](args)), [], `${op} 的返回值与 schema 不符`)
+    assertContract('vscode_git', await handlers[op](args), op)
   }
 })
 
 test('doc.open / doc.read / doc.edit 的返回值能通过对应 schema', async () => {
   const handlers = await handlersFor()
-  assert.deepEqual(validateFor('vscode_open', await handlers['doc.open']({ path: 'C:\\ws\\a.js' })), [])
-  assert.deepEqual(validateFor('vscode_read', await handlers['doc.read']({ paths: ['C:\\ws\\a.js'] })), [])
-  assert.deepEqual(
-    validateFor('vscode_edit', await handlers['doc.edit']({ edits: [{ path: 'C:\\ws\\a.js', fullText: 'y' }] })),
-    [],
-  )
+  assertContract('vscode_open', await handlers['doc.open']({ path: 'C:\\ws\\a.js' }))
+  assertContract('vscode_read', await handlers['doc.read']({ paths: ['C:\\ws\\a.js'] }))
+  assertContract('vscode_edit', await handlers['doc.edit']({ edits: [{ path: 'C:\\ws\\a.js', fullText: 'y' }] }))
 })
 
 test('无编辑器时 context 全动作都能通过 vscode_context 的 schema', async () => {
   const handlers = await handlersFor()
   for (const op of ['context.selection', 'context.activeEditor', 'context.openEditors', 'context.diagnostics', 'context.workspaceFolders']) {
-    assert.deepEqual(validateFor('vscode_context', await handlers[op]({})), [], `${op} 的返回值与 schema 不符`)
+    assertContract('vscode_context', await handlers[op]({}), op)
   }
 })
 
 test('term 系列返回值能通过 vscode_terminal 的 schema', async () => {
   const handlers = await handlersFor()
-  assert.deepEqual(validateFor('vscode_terminal', await handlers['term.list']({})), [])
-  assert.deepEqual(validateFor('vscode_terminal', await handlers['term.run']({ command: 'echo hi', timeoutMs: 5_000 })), [])
+  assertContract('vscode_terminal', await handlers['term.list']({}))
+  assertContract('vscode_terminal', await handlers['term.run']({ command: 'echo hi', timeoutMs: 5_000 }))
 })
 
-test('dev.reload 的返回值能通过 vscode_dev 的 schema', async () => {
-  const handlers = await handlersFor()
-  assert.deepEqual(validateFor('vscode_dev', await handlers['dev.reload']({})), [])
+test('vscode_dev 的两种结果（成功/未确认）都符合 schema', () => {
+  assertContract('vscode_dev', buildDevResult({
+    action: 'restart_extensions',
+    previousPid: 1,
+    fresh: { pid: 2 },
+    waitedMs: 5,
+  }), 'dev 成功')
+  assertContract('vscode_dev', buildDevResult({
+    action: 'reload_window',
+    previousPid: 1,
+    fresh: undefined,
+    waitedMs: 5,
+  }), 'dev 未确认')
 })
 
 test('vscode_status 连不上时也符合自己的 schema', async () => {
   const emptyDir = await mkdtemp(join(tmpdir(), 'dsh-contract-'))
-  const statusTools = createTools({
-    ctx: { workingDirectory: { get: () => 'C:\\ws' } },
-    settings: { ...settings, bridgeDir: emptyDir },
-    logger: console,
-  })
-  const status = statusTools.find((tool) => tool.name === 'vscode_status')
-  const value = await status.execute({}, { agent: { session: {} } })
+  try {
+    const statusTools = createTools({
+      ctx: { workingDirectory: { get: () => 'C:\\ws' } },
+      settings: { ...settings, bridgeDir: emptyDir },
+      logger: console,
+    })
+    const status = statusTools.find((tool) => tool.name === 'vscode_status')
+    const value = await status.execute({}, { agent: { session: {} } })
 
-  exercised.add('vscode_status')
-  assert.deepEqual(validateValue(status.output.schema, JSON.parse(JSON.stringify(value))), [])
+    const errors = validateValue(status.output.schema, JSON.parse(JSON.stringify(value)))
+    assert.deepEqual(errors, [])
+    exercised.add('vscode_status')
+  } finally {
+    await rm(emptyDir, { recursive: true, force: true })
+  }
 })
 
 test('规范：每个注册的工具都必须有真实契约校验（新增工具必须在这里补用例）', () => {
-  const registered = tools.map((tool) => tool.name).sort()
-  const covered = [...exercised].sort()
-  assert.deepEqual(covered, registered, '有工具没被契约测试覆盖：补用例，或删掉这个工具')
+  const registered = [...new Set(registeredByPlugin())].sort()
+  const fromFactory = tools.map((tool) => tool.name).sort()
+  assert.deepEqual(fromFactory, registered, 'createTools 与 apply() 的注册结果不一致')
+  assert.deepEqual([...exercised].sort(), registered, '有工具没被契约测试覆盖：补用例，或删掉这个工具')
 })
+

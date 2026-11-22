@@ -1,4 +1,4 @@
-# Git 工作流
+﻿# Git 工作流
 
 本仓库是 DSH ↔ VSCode 桥接（扩展 + DSH 插件）的源码。所有开发按下面四条规则走。
 
@@ -14,11 +14,11 @@
 ## 2. 开发只在 story 分支上进行
 
 - `main` 只接受合并，不直接在上面改代码。
-- 提交信息用 `type(scope): summary`，例如 `fix(guard): 首次代码改动前强制询问`。
+- 提交信息用 `type(scope): summary`，例如 `feat(workbench): VSCode 改为按需工作台`。
 
 ## 3. review 和测试都过了才能合并
 
-- 测试：`node --test "test/**/*.test.mjs"` 必须全绿（当前基线 104 项）。
+- 测试：`node --test "test/**/*.test.mjs"` 必须全绿（当前基线 109 项）。
 - 评审：跑一次代码评审（`/review` 或 DSH 的 review 流程），
   Critical / Important 级别的问题**修完并补测试**才算过。
 - 两者都通过，才允许合并到 `main`。
@@ -37,3 +37,4 @@
 
 - 版本：`0.2.0`
 - 对应分支：`story/version_0_2_0`
+

@@ -2,6 +2,8 @@
 
 // 这是扩展里唯一 require('vscode') 的文件；其余 lib/ 只接受注入的 vscode。
 const vscode = require('vscode')
+const os = require('node:os')
+const path = require('node:path')
 const { startBridge } = require('./lib/activate.js')
 const { createHandlers } = require('./lib/handlers.js')
 const { getGitApi } = require('./lib/git.js')
@@ -40,9 +42,10 @@ async function activate(context) {
   item.show()
   context.subscriptions.push(item)
 
-  // 开发期热更新：源码被重新拷进安装目录就自动重启扩展宿主，不用手动重载
-  if (config.get('hotReload', true) !== false) {
-    context.subscriptions.push(createHotReload({ vscode, dir: __dirname, logger: console }))
+  // 开发期热更新：默认关闭；开启后监视触发文件（不是安装目录，避免目录被删时的事件风暴）
+  if (config.get('hotReload', false) === true) {
+    const triggerFile = path.join(os.homedir(), '.dsh', 'vscode-bridge', 'reload.trigger')
+    context.subscriptions.push(createHotReload({ vscode, triggerFile, logger: console }))
   }
 
   context.subscriptions.push(

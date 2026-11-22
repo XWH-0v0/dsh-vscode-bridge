@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "VSCode bridge",
-    "description": "Bridges the VSCode editor, integrated terminal, and source control to DeepSeek Harness: edit code, review diffs, run commands, and do branch/commit/push work in VSCode, with git credentials signed in once.",
+    "title": "VSCode workbench",
+    "description": "Turns VSCode into an on-demand workbench for DeepSeek Harness: use it for diffs, a real terminal, diagnostics, or source control; native tools stay the default for editing. Git credentials sign in once.",
     "detail": "docs/DETAIL.md"
   }
 }

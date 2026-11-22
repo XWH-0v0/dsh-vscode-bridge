@@ -38,8 +38,8 @@
         },
         "dshVscodeBridge.hotReload": {
           "type": "boolean",
-          "default": true,
-          "description": "安装目录里的扩展文件被改动时自动重启扩展宿主（开发期热更新）。"
+          "default": false,
+          "description": "开发期：监视 ~/.dsh/vscode-bridge/reload.trigger，触及时自动重启扩展宿主（默认关闭，开启后任何能写该文件的人都能让扩展重新加载代码）。"
         }
       }
     }
