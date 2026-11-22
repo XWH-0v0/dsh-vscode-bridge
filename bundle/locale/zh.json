@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "VSCode 桥接",
+    "description": "把 VSCode 的编辑器、集成终端与源代码管理桥接给 DeepSeek Harness：改代码、看 diff、跑终端、建分支/提交/推送都在 VSCode 里完成，git 凭据只需登录一次。",
+    "detail": "docs/DETAIL.md"
+  }
+}

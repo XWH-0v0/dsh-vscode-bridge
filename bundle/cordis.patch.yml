@@ -1,0 +1,11 @@
+# dsh-vscode-bridge — DSH 侧的 VSCode 桥接插件。
+#
+# 一行：注册 7 个 vscode_* 工具，通过本机 HTTP 调 VSCode 扩展。
+# 不装扩展、VSCode 没开时，工具返回 BRIDGE_UNAVAILABLE 而不是抛栈。
+- insert:
+    - id: vscode-bridge
+      name: '@local/dsh-vscode-bridge'
+      config:
+        preferVscodeForCode: ask
+        autoOpenWindow: true
+        defaultSave: true

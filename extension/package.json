@@ -1,0 +1,42 @@
+{
+  "name": "dsh-vscode-bridge",
+  "displayName": "DSH VSCode Bridge",
+  "description": "把 VSCode 的编辑器、集成终端与源代码管理桥接给 DeepSeek Harness。",
+  "publisher": "local",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "dshVscodeBridge.showInfo",
+        "title": "DSH 桥: 显示连接信息"
+      }
+    ],
+    "configuration": {
+      "title": "DSH VSCode Bridge",
+      "properties": {
+        "dshVscodeBridge.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "VSCode 启动时自动开启桥接。"
+        },
+        "dshVscodeBridge.instanceDir": {
+          "type": "string",
+          "default": "",
+          "description": "实例文件目录，留空使用 ~/.dsh/vscode-bridge。"
+        }
+      }
+    }
+  }
+}
