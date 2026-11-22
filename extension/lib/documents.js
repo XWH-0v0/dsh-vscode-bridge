@@ -206,7 +206,10 @@ async function openDocument({ vscode }, { path: target, line, column } = {}) {
     ? new vscode.Position(Math.max(0, Number(line) - 1), Math.max(0, Number(column ?? 1) - 1))
     : undefined
   await vscode.window.showTextDocument(doc, position ? { selection: new vscode.Range(position, position) } : undefined)
-  return { path: target, line: line ?? null, uri: doc.uri?.fsPath ?? target }
+  // 没给行号就不要塞 null：输出 schema 里 line 是 number，null 会被判 invalid
+  const result = { path: target, uri: doc.uri?.fsPath ?? target }
+  if (line !== undefined) result.line = Number(line)
+  return result
 }
 
 /** 用自建虚拟文档打开 before/after 对比。 */

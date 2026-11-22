@@ -66,9 +66,20 @@ function createHandlers({ vscode, diffStore }) {
 
     'doc.diff': async ({ path, before, after, ref }) => documents.openDiff({ vscode, store: diffStore }, { path, before, after, ref }),
 
-    'context.activeEditor': async () => ({ editor: context.activeEditor({ vscode }) }),
+    'context.activeEditor': async () => {
+      const editor = context.activeEditor({ vscode })
+      // schema 里 editor 是对象；没有编辑器时整体省略，不要塞 null
+      return editor ? { editor } : {}
+    },
 
-    'context.selection': async () => context.selection({ vscode }),
+    'context.selection': async () => {
+      const value = context.selection({ vscode })
+      if (!value.editor) {
+        const { editor, ...rest } = value
+        return rest
+      }
+      return value
+    },
 
     'context.openEditors': async () => context.openEditors({ vscode }),
 

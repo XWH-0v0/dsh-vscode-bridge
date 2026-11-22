@@ -138,14 +138,16 @@ async function runCommand({ vscode }, { command, cwd, timeoutMs = 60_000, name, 
   await new Promise((resolve) => setTimeout(resolve, 30))
 
   const trimmed = trimTail(output)
-  return {
-    exitCode: event.exitCode ?? null,
+  const result = {
     output: trimmed.output,
     truncated: trimmed.truncated,
     usedShellIntegration: true,
     terminal: terminal.name,
-    ...(readError ? { readError: String(readError?.message ?? readError) } : {}),
   }
+  // 输出 schema 里 exitCode 是 number：拿不到退出码就省略，不要写 null
+  if (typeof event.exitCode === 'number') result.exitCode = event.exitCode
+  if (readError) result.readError = String(readError?.message ?? readError)
+  return result
 }
 
 function listTerminals({ vscode }) {
