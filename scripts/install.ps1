@@ -15,7 +15,7 @@ if (-not (Test-Path $manifestPath)) {
   throw "找不到扩展清单：$manifestPath"
 }
 
-$manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+$manifest = Get-Content $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $folderName = "$($manifest.publisher).$($manifest.name)-$($manifest.version)"
 $target = Join-Path $env:USERPROFILE ".vscode\extensions\$folderName"
 

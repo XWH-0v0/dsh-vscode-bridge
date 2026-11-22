@@ -4,16 +4,15 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { createTools } from './lib/tools.js'
 import { policyText, runtimeContextText } from './lib/policy.js'
-import { shouldNudge } from './lib/ask-guard.js'
 
 export const name = 'dsh-vscode-bridge'
 export const inject = ['tools', 'systemPrompt', 'workingDirectory']
 
 export const Config = Schema.object({
   preferVscodeForCode: Schema.union(['ask', 'always', 'never']).default('ask').volatile()
-    .description('代码开发是否走 VSCode：ask 每次先问，always 直接走，never 关闭全部 vscode_* 工具'),
+    .description('never = 关闭全部 vscode_* 工具；ask/always 都表示"按需使用，不主动询问"（保留旧值只为兼容已存配置）'),
   autoOpenWindow: Schema.boolean().default(true).volatile()
-    .description('需要时是否允许自动执行 code -n 打开 VSCode 窗口'),
+    .description('需要时是否允许自己执行 code -n 打开 VSCode 窗口'),
   defaultSave: Schema.boolean().default(true).volatile()
     .description('vscode_edit 默认是否保存文件'),
   bridgeDir: Schema.string().default('')
@@ -37,8 +36,6 @@ function readSettings(config) {
 export function apply(ctx, config) {
   const logger = ctx.logger ?? console
   const settings = readSettings(config)
-  // 每个 agent 一次：nudged 记录"已经提醒过"，usedVscode 记录"已经决定用桥"
-  const state = { nudged: new Set(), usedVscode: new Set() }
   const tools = createTools({ ctx, settings, logger })
 
   for (const tool of tools) {
@@ -49,18 +46,11 @@ export function apply(ctx, config) {
 
   ctx.tools.guard((execution) => {
     const name = typeof execution?.name === 'string' ? execution.name : ''
-    const agentId = execution?.agent?.id
-
-    if (name.startsWith('vscode_')) {
-      if (settings.preferVscodeForCode === 'never') {
-        return 'VSCode 桥接已在配置里关闭（preferVscodeForCode=never）。请用户改回 ask 或 always 再试，不要重试。'
-      }
-      if (agentId) state.usedVscode.add(agentId)
-      return undefined
+    if (!name.startsWith('vscode_')) return undefined
+    if (settings.preferVscodeForCode === 'never') {
+      return 'VSCode 工作台已在配置里关闭（preferVscodeForCode=never）。请用户改回 ask 或 always 再试，不要重试。'
     }
-
-    // 软约束实测会被忽略（2026-11-22）：第一次改代码时硬拦一次，逼出那句询问
-    return shouldNudge({ toolName: name, args: execution?.arguments, agentId, state, settings })
+    return undefined
   })
 
   ctx.systemPrompt.section({
@@ -69,7 +59,6 @@ export function apply(ctx, config) {
     text: () => policyText(settings),
   })
 
-  // 动态上下文每轮重新注入，比埋在长 prompt 里的静态段落更难被忽略
   ctx.systemPrompt.context({
     name: 'vscode-bridge-status',
     order: 30,

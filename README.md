@@ -1,7 +1,9 @@
 # dsh-vscode-bridge
 
-让 DeepSeek Harness（DSH）在**你的 VSCode** 里工作：改代码、看 diff、读选区与诊断、在集成终端跑命令、
-通过源代码管理做 git。git 凭据只需在 VSCode 里登录一次，之后 fetch/push/pull 都不再要密钥。
+把 VSCode 变成 DeepSeek Harness 的**工作台**：需要看 diff、跑真实终端、读诊断、走源代码管理做 git 时用它；
+平时的读写与批量编辑仍走原生工具，快且直接。git 凭据只需在 VSCode 里登录一次，之后 fetch/push/pull 都不再要密钥。
+
+工作台是**按需**的：需要时自己打开，不主动问用户；VSCode 没开就 `vscode_open(action:"folder")` 自己开。
 
 设计见 [DESIGN.md](../../docs/dsh-vscode-bridge-docs/DESIGN.md)，实施计划见 [PLAN.md](../../docs/dsh-vscode-bridge-docs/PLAN.md)。
 
@@ -25,6 +27,8 @@ test/             单元测试（node:test，注入伪 vscode 模块）
    pwsh -File scripts/install.ps1
    ```
    然后在 VSCode 里 `Ctrl+Shift+P` → **Developer: Reload Window**。状态栏出现 `DSH:<端口>` 即就绪。
+   只有首次安装需要这一步：之后把新代码拷进安装目录，扩展会自己重启宿主（`dshVscodeBridge.hotReload`，默认开），
+   也可以用 `vscode_dev(action:"reload")` 手动触发。
 
 2. 装 DSH 插件（bundle）。先装依赖（bundle 是链接目录，pnpm 不会自动装它的依赖）：
    ```powershell
@@ -45,6 +49,7 @@ test/             单元测试（node:test，注入伪 vscode 模块）
 | `vscode_edit` | 批量编辑，带 `baseVersion` 冲突保护，默认保存 |
 | `vscode_terminal` | 在集成终端跑命令并取回输出/退出码 |
 | `vscode_git` | status/diff/log/add/commit/分支/checkout/fetch/pull/push |
+| `vscode_dev` | `reload` 重启扩展宿主加载新代码；`reload_window` 重载整个窗口 |
 
 ## 排障
 

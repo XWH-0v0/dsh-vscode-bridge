@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-vscode-bridge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "DeepSeek Harness 的 VSCode 桥接：编辑器、集成终端与源代码管理。",

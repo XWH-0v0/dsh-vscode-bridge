@@ -1,14 +1,17 @@
 # VSCode 桥接
 
-让 DeepSeek Harness（DSH）在你的 VSCode 里干活，而不是在它自己的进程里。装一次，之后：
+让 DeepSeek Harness（DSH）把 VSCode 当作**工作台**：需要看 diff、跑真实终端、读诊断、
+走源代码管理做 git 时才用它；日常读写与批量编辑仍用原生工具。
 
-- **改代码**：改动以 VSCode 原生编辑生效，能在编辑器里看到、能 `Ctrl+Z` 撤销；改完还能直接把
-  "原始 vs 现在"的对比打开给你看。
+- **按需使用，不打断**：需要时自己打开工作台（没有窗口就 `vscode_open(action:"folder")`），
+  不会每次改代码都问"要不要用 VSCode"。
+- **改代码**：需要你 review 时用 `vscode_edit` 落到编辑器里并打开对比；纯批量编辑走原生工具。
 - **看上下文**：读得到当前选区、打开的文件、以及语言服务器报出的红波浪线。
 - **跑终端**：在你自己的集成终端里执行命令（构建、dev server、跑测试），命令输出会回到 DSH。
 - **做 git**：状态、diff、日志、暂存、提交、建分支、checkout、fetch、pull、push 全部走
   VSCode 的源代码管理。**git 凭据只需在 VSCode 里登录一次**，之后连终端里的 git 也能用。
   （`stash` 不在 VSCode 的 Git API 里，会提示改用终端。）
+- **改扩展后自更新**：安装目录里的扩展文件变化会自动重启扩展宿主；也可 `vscode_dev(action:"reload")` 手动触发。
 
 ## 怎么用
 

@@ -516,7 +516,46 @@ export function createTools({ ctx, settings, logger }) {
     },
   }
 
-  return [statusTool, gitTool, readTool, editTool, openTool, contextTool, terminalTool]
+  const devTool = {
+    name: 'vscode_dev',
+    description: '维护 VSCode 窗口本身：改完扩展代码后用 reload 让窗口加载新代码（保留编辑器状态、几秒回来），要彻底重开窗口用 reload_window。',
+    parameters: obj({
+      action: { type: 'string', enum: ['reload', 'reload_window'], description: 'reload=重启扩展宿主；reload_window=重载整个窗口' },
+      window: str('可选：指定 VSCode 窗口（pid 或文件夹）'),
+    }, ['action']),
+    output: {
+      schema: obj({
+        scheduled: bool('是否已安排重载'),
+        action: str('实际动作'),
+        note: str('备注'),
+      }),
+      render: (_args, value) => [{
+        type: 'text',
+        text: `已安排${value.action === 'reload_window' ? '窗口重载' : '扩展宿主重启'}${value.note ? `（${value.note}）` : ''}；几秒后用 vscode_status 确认新实例`,
+      }],
+    },
+    timeoutMs: Math.max(timeoutMs, 30_000),
+    isConcurrencySafe: () => false,
+    async execute(args, exec) {
+      const op = args.action === 'reload_window' ? 'dev.reloadWindow' : 'dev.reload'
+      try {
+        const instance = await bridgeFor(exec, { window: args.window })
+        return await callBridge(instance, op, {}, { timeoutMs })
+      } catch (error) {
+        // 重载会掐断连接，超时可能意味着"已经在重启了"
+        if (error instanceof BridgeError && error.code === 'TIMEOUT') {
+          return {
+            scheduled: true,
+            action: op === 'dev.reloadWindow' ? 'reload_window' : 'restart_extensions',
+            note: '响应超时，但重载很可能已经发生',
+          }
+        }
+        throw asToolError(error)
+      }
+    },
+  }
+
+  return [statusTool, gitTool, readTool, editTool, openTool, contextTool, terminalTool, devTool]
 }
 
 export { asToolError }

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { waitForInstance, openFolderWindow, spawnWindow, resolveCodeExe } from '../../bundle/lib/open-window.js'
 import * as openWindow from '../../bundle/lib/open-window.js'
-import { policyText } from '../../bundle/lib/policy.js'
+import { policyText, runtimeContextText } from '../../bundle/lib/policy.js'
 
 const settings = { bridgeDir: 'C:\\tmp\\bridge', autoOpenWindow: true }
 
@@ -112,8 +112,16 @@ test('resolveCodeExe 优先用环境变量，其次从 PATH 上的 code.cmd 推�
   assert.equal(derived, 'C:\\vscode\\Code.exe')
 })
 
-test('policyText 随策略变化', () => {
-  assert.match(policyText({ preferVscodeForCode: 'ask' }), /先问一次/)
-  assert.doesNotMatch(policyText({ preferVscodeForCode: 'always' }), /先问一次/)
+test('policyText 把 VSCode 定位成按需工作台，不主动询问', () => {
+  const text = policyText({ preferVscodeForCode: 'ask' })
+  assert.match(text, /工作台/)
+  assert.match(text, /不要问/)
+  assert.match(text, /原生工具/)
   assert.match(policyText({ preferVscodeForCode: 'never' }), /关闭/)
+})
+
+test('动态上下文按连通状态给不同指引', () => {
+  assert.match(runtimeContextText({ preferVscodeForCode: 'ask' }, true), /已连接/)
+  assert.match(runtimeContextText({ preferVscodeForCode: 'ask' }, false), /vscode_open/)
+  assert.equal(runtimeContextText({ preferVscodeForCode: 'never' }, true), '')
 })

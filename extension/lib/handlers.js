@@ -5,6 +5,7 @@ const git = require('./git.js')
 const documents = require('./documents.js')
 const context = require('./context.js')
 const terminal = require('./terminal.js')
+const dev = require('./dev.js')
 
 async function fileExists(target) {
   try {
@@ -94,6 +95,10 @@ function createHandlers({ vscode, diffStore }) {
     'term.show': async ({ name }) => terminal.showTerminal({ vscode }, { name }),
 
     'term.kill': async ({ name }) => terminal.killTerminal({ vscode }, { name }),
+
+    'dev.reload': async () => dev.reloadExtensionHost({ vscode }),
+
+    'dev.reloadWindow': async () => dev.reloadWindow({ vscode }),
   }
 }
 

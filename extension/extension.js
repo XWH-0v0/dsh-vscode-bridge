@@ -6,6 +6,7 @@ const { startBridge } = require('./lib/activate.js')
 const { createHandlers } = require('./lib/handlers.js')
 const { getGitApi } = require('./lib/git.js')
 const { createDiffStore, createDiffProvider } = require('./lib/documents.js')
+const { createHotReload } = require('./lib/dev.js')
 
 let current
 let diffStore
@@ -38,6 +39,11 @@ async function activate(context) {
   item.command = 'dshVscodeBridge.showInfo'
   item.show()
   context.subscriptions.push(item)
+
+  // 开发期热更新：源码被重新拷进安装目录就自动重启扩展宿主，不用手动重载
+  if (config.get('hotReload', true) !== false) {
+    context.subscriptions.push(createHotReload({ vscode, dir: __dirname, logger: console }))
+  }
 
   context.subscriptions.push(
     vscode.commands.registerCommand('dshVscodeBridge.showInfo', () => {
